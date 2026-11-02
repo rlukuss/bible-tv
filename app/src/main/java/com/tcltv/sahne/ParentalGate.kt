@@ -2,6 +2,7 @@ package com.tcltv.sahne
 
 import android.os.SystemClock
 import androidx.annotation.StringRes
+import com.tcltv.sahne.data.ChildAccess
 import com.tcltv.sahne.data.LauncherSettings
 import com.tcltv.sahne.data.PinHasher
 import com.tcltv.sahne.data.PinKind
@@ -43,10 +44,14 @@ class ParentalGate(
         if (locked && hasPin) _request.value = PinRequest(reason, action) else action()
     }
 
-    /** Runs [action] now, or after the PIN when settings are protected and no recent PIN covers it. */
+    /**
+     * Runs [action] now, or after the PIN when settings are protected and no recent PIN covers it. In a child's
+     * profile they always are, whatever the setting says.
+     */
     fun requireForAdmin(@StringRes reason: Int, action: () -> Unit) {
         val parental = settings.value.parental
-        if (!parental.hasPin || !parental.protectSettings || SystemClock.elapsedRealtime() < adminUntil) {
+        val protect = parental.protectSettings || ChildAccess.needsGrownUp(settings.value.activeProfile)
+        if (!parental.hasPin || !protect || SystemClock.elapsedRealtime() < adminUntil) {
             action()
         } else {
             _request.value = PinRequest(reason) {

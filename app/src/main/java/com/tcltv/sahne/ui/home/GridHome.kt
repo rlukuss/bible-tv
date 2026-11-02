@@ -64,6 +64,7 @@ import com.tcltv.sahne.R
 import com.tcltv.sahne.data.AppCatalog
 import com.tcltv.sahne.data.CardTheme
 import com.tcltv.sahne.data.HdmiInput
+import com.tcltv.sahne.data.ProfileKind
 import com.tcltv.sahne.data.LiveTvInput
 import com.tcltv.sahne.data.LastPlayed
 import com.tcltv.sahne.data.LaunchableApp
@@ -228,7 +229,8 @@ internal fun GridHome(
                                 .glass(RoundedCornerShape(30.dp), GlassStyle.Panel)
                                 .padding(start = ROW_INSET.dp, end = ROW_INSET.dp, top = 16.dp, bottom = 8.dp),
                         ) {
-                            CellRow(shelf) { app, isRowEnd -> Cell(app, isRowEnd) }
+                            val childShelf = settings.activeProfile?.kind == ProfileKind.CHILD && shelf.isNotEmpty()
+                            CellRow(shelf, slots = if (childShelf) shelf.size else COLUMNS) { app, isRowEnd -> Cell(app, isRowEnd) }
                         }
                         // The hint is about the apps below the shelf; with none there it would point at nothing.
                         if (cells.any { it != null }) {
@@ -288,11 +290,19 @@ internal fun GridHome(
     }
 }
 
-/** Always [COLUMNS] equal slots, so a short last row keeps the same tile size as full rows. */
+/**
+ * Always [slots] equal slots ([COLUMNS] by default), so a short last row keeps the same tile size as full rows.
+ * A child's few apps pass their own count instead and fill the width.
+ */
 @Composable
-private fun CellRow(cells: List<LaunchableApp?>, modifier: Modifier = Modifier, cell: @Composable (LaunchableApp?, Boolean) -> Unit) {
+private fun CellRow(
+    cells: List<LaunchableApp?>,
+    modifier: Modifier = Modifier,
+    slots: Int = COLUMNS,
+    cell: @Composable (LaunchableApp?, Boolean) -> Unit,
+) {
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        for (index in 0 until COLUMNS) {
+        for (index in 0 until slots) {
             Box(Modifier.weight(1f)) {
                 if (index < cells.size) key(cells[index]?.packageName ?: "add") { cell(cells[index], index == cells.lastIndex) }
             }

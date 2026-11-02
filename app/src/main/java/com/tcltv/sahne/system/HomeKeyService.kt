@@ -58,11 +58,19 @@ class HomeKeyService : AccessibilityService() {
     private var learnUntil = 0L
     private var learnedKey = NO_KEY
 
+    /** A child watching, and whether Matinee is on screen: see [KidKeyFilter]. */
+    @Volatile
+    private var kidKeys = KidKeyState.State()
+
     private val commands = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
                 ACTION_LEARN_KEY -> learnUntil = SystemClock.uptimeMillis() + LEARN_WINDOW_MS
                 ACTION_BINDINGS_CHANGED -> bindings.invalidate()
+                KidKeyState.ACTION_CHANGED -> kidKeys = KidKeyState.State(
+                    isChild = intent.getBooleanExtra(KidKeyState.EXTRA_CHILD, false),
+                    matineeInFront = intent.getBooleanExtra(KidKeyState.EXTRA_IN_FRONT, false),
+                )
             }
         }
     }
@@ -78,9 +86,11 @@ class HomeKeyService : AccessibilityService() {
                 packageNames = stockHomes.map { it.packageName }.distinct().toTypedArray()
             }
         }
+        kidKeys = KidKeyState.read(this)
         val filter = IntentFilter().apply {
             addAction(ACTION_LEARN_KEY)
             addAction(ACTION_BINDINGS_CHANGED)
+            addAction(KidKeyState.ACTION_CHANGED)
         }
         ContextCompat.registerReceiver(this, commands, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         // After a restart the stock home screen is often up before this service is bound, so its window event is
@@ -97,6 +107,8 @@ class HomeKeyService : AccessibilityService() {
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         if (learn(event)) return true
+        // In a child's profile, keys other than the ones needed to watch stop here, typed in through adb or not.
+        if (KidKeyFilter.blocks(event.keyCode, kidKeys.isChild, kidKeys.matineeInFront)) return true
         if (event.keyCode == KeyEvent.KEYCODE_HOME) {
             if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) openMatinee()
             return true

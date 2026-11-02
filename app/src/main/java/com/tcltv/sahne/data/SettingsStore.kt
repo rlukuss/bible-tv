@@ -7,6 +7,7 @@ import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.emptyPreferences
 import kotlinx.coroutines.flow.catch
 import java.io.IOException
+import java.util.UUID
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -36,6 +37,8 @@ data class LauncherSettings(
     val showSeconds: Boolean = false,
     val showGreeting: Boolean = true,
     val reduceMotion: Boolean = false,
+    /** Every effect off and a plain background, for slow TVs (see [ExtremePerformance]). */
+    val extremePerformance: Boolean = false,
     val adaptiveBackground: Boolean = true,
     val glassEffects: Boolean = true,
     val airplayReceiver: Boolean = false,
@@ -43,6 +46,7 @@ data class LauncherSettings(
     val homeLayout: HomeLayout = HomeLayout.GRID,
     val showClock: Boolean = true,
     val showWeather: Boolean = true,
+    val showVerse: Boolean = true,
     val showAirPlay: Boolean = true,
     val showMemory: Boolean = true,
     val showInputs: Boolean = true,
@@ -76,9 +80,15 @@ data class LauncherSettings(
     val wallpaperAnimated: Boolean = false,
     /** File names of pictures the user added as wallpapers. */
     val userWallpapers: List<String> = emptyList(),
+    /** Everyone who watches; the active one's home is the one in the fields above (see [ProfileSnapshot]). */
+    val profiles: List<Profile> = emptyList(),
+    val activeProfileId: String? = null,
 ) {
+    val activeProfile: Profile? get() = profiles.firstOrNull { it.id == activeProfileId }
+
     companion object {
-        val DEFAULT_LOCATION = WeatherLocation("İstanbul", 41.0138, 28.9497)
+        // A family.properties `city=` line sets the home's own town at build time; Paris otherwise.
+        val DEFAULT_LOCATION = FamilySeed.city(com.tcltv.sahne.BuildConfig.FAMILY) ?: WeatherLocation("Paris", 48.8566, 2.3522)
     }
 }
 
@@ -95,6 +105,7 @@ class SettingsStore(private val context: Context) {
         val showSeconds = booleanPreferencesKey("show_seconds")
         val showGreeting = booleanPreferencesKey("show_greeting")
         val reduceMotion = booleanPreferencesKey("reduce_motion")
+        val extremePerformance = booleanPreferencesKey("extreme_performance")
         val adaptiveBackground = booleanPreferencesKey("adaptive_background")
         val glassEffects = booleanPreferencesKey("glass_effects")
         val airplayReceiver = booleanPreferencesKey("airplay_receiver")
@@ -102,6 +113,7 @@ class SettingsStore(private val context: Context) {
         val homeLayout = stringPreferencesKey("home_layout")
         val showClock = booleanPreferencesKey("show_clock")
         val showWeather = booleanPreferencesKey("show_weather")
+        val showVerse = booleanPreferencesKey("show_verse")
         val showAirPlay = booleanPreferencesKey("show_airplay")
         val showMemory = booleanPreferencesKey("show_memory")
         val showInputs = booleanPreferencesKey("show_inputs")
@@ -138,6 +150,8 @@ class SettingsStore(private val context: Context) {
         val protectSettings = booleanPreferencesKey("protect_settings")
         val pinFailures = intPreferencesKey("pin_failures")
         val pinLockedUntil = longPreferencesKey("pin_locked_until")
+        val profiles = stringPreferencesKey("profiles")
+        val activeProfileId = stringPreferencesKey("active_profile_id")
         const val INPUT_NAME_PREFIX = "input_name:"
         const val INPUT_LOGO_PREFIX = "input_logo:"
     }
@@ -169,6 +183,7 @@ class SettingsStore(private val context: Context) {
             showSeconds = this[Keys.showSeconds] ?: defaults.showSeconds,
             showGreeting = this[Keys.showGreeting] ?: defaults.showGreeting,
             reduceMotion = this[Keys.reduceMotion] ?: defaults.reduceMotion,
+            extremePerformance = this[Keys.extremePerformance] ?: false,
             adaptiveBackground = this[Keys.adaptiveBackground] ?: defaults.adaptiveBackground,
             glassEffects = this[Keys.glassEffects] ?: defaults.glassEffects,
             airplayReceiver = this[Keys.airplayReceiver] ?: defaults.airplayReceiver,
@@ -176,6 +191,7 @@ class SettingsStore(private val context: Context) {
             homeLayout = HomeLayout.entries.firstOrNull { it.name == this[Keys.homeLayout] } ?: defaults.homeLayout,
             showClock = this[Keys.showClock] ?: defaults.showClock,
             showWeather = this[Keys.showWeather] ?: defaults.showWeather,
+            showVerse = this[Keys.showVerse] ?: defaults.showVerse,
             showAirPlay = this[Keys.showAirPlay] ?: defaults.showAirPlay,
             showMemory = this[Keys.showMemory] ?: defaults.showMemory,
             showInputs = this[Keys.showInputs] ?: defaults.showInputs,
@@ -218,6 +234,8 @@ class SettingsStore(private val context: Context) {
                 failures = this[Keys.pinFailures] ?: 0,
                 lockedUntilMillis = this[Keys.pinLockedUntil] ?: 0L,
             ),
+            profiles = ProfilesCodec.decode(this[Keys.profiles]),
+            activeProfileId = this[Keys.activeProfileId],
         )
     }
 
@@ -234,6 +252,15 @@ class SettingsStore(private val context: Context) {
     suspend fun setShowSeconds(value: Boolean) = edit { it[Keys.showSeconds] = value }
     suspend fun setShowGreeting(value: Boolean) = edit { it[Keys.showGreeting] = value }
     suspend fun setReduceMotion(value: Boolean) = edit { it[Keys.reduceMotion] = value }
+
+    suspend fun setExtremePerformance(on: Boolean) = edit { prefs ->
+        val s = ExtremePerformance.apply(prefs.toSettings(), on, DeviceProfile.of(context).defaults())
+        prefs[Keys.extremePerformance] = s.extremePerformance
+        prefs[Keys.glassEffects] = s.glassEffects
+        prefs[Keys.wallpaperAnimated] = s.wallpaperAnimated
+        prefs[Keys.adaptiveBackground] = s.adaptiveBackground
+        prefs[Keys.reduceMotion] = s.reduceMotion
+    }
     suspend fun setAdaptiveBackground(value: Boolean) = edit { it[Keys.adaptiveBackground] = value }
     suspend fun setGlassEffects(value: Boolean) = edit { it[Keys.glassEffects] = value }
     suspend fun setAirplayReceiver(value: Boolean) = edit { it[Keys.airplayReceiver] = value }
@@ -241,6 +268,7 @@ class SettingsStore(private val context: Context) {
     suspend fun setHomeLayout(value: HomeLayout) = edit { it[Keys.homeLayout] = value.name }
     suspend fun setShowClock(value: Boolean) = edit { it[Keys.showClock] = value }
     suspend fun setShowWeather(value: Boolean) = edit { it[Keys.showWeather] = value }
+    suspend fun setShowVerse(value: Boolean) = edit { it[Keys.showVerse] = value }
     suspend fun setShowAirPlay(value: Boolean) = edit { it[Keys.showAirPlay] = value }
     suspend fun setShowMemory(value: Boolean) = edit { it[Keys.showMemory] = value }
     suspend fun setShowInputs(value: Boolean) = edit { it[Keys.showInputs] = value }
@@ -314,6 +342,57 @@ class SettingsStore(private val context: Context) {
     suspend fun clearPinFailures() = edit {
         it[Keys.pinFailures] = 0
         it[Keys.pinLockedUntil] = 0L
+    }
+
+    /** Creates the first profiles once: the family's from [seed], or the current home as the only one. */
+    suspend fun ensureProfiles(seed: List<Profile>) = edit { prefs ->
+        if (ProfilesCodec.decode(prefs[Keys.profiles]).isNotEmpty()) return@edit
+        val (profiles, activeId) = ProfileSwitch.initial(prefs.toSettings(), seed) { UUID.randomUUID().toString() }
+        prefs[Keys.profiles] = ProfilesCodec.encode(profiles)
+        prefs[Keys.activeProfileId] = activeId
+        prefs.writeHome(profiles.first { it.id == activeId })
+    }
+
+    /** Keeps the active profile's home and puts [targetId]'s in its place, in one write. */
+    suspend fun switchProfile(targetId: String) = edit { prefs ->
+        val settings = prefs.toSettings()
+        val switched = ProfileSwitch.switch(settings, settings.profiles, settings.activeProfileId, targetId) ?: return@edit
+        prefs[Keys.profiles] = ProfilesCodec.encode(switched.profiles)
+        prefs[Keys.activeProfileId] = targetId
+        prefs.writeHome(switched.target)
+    }
+
+    /**
+     * Saves the profiles [change] returns from the current ones (null leaves them). The profile watching now keeps its
+     * name and colour in the home's own keys, and takes the matching home if it became a child or an adult.
+     */
+    suspend fun editProfiles(change: (profiles: List<Profile>, activeId: String?) -> List<Profile>?) = edit { prefs ->
+        val settings = prefs.toSettings()
+        val activeId = settings.activeProfileId
+        val current = settings.profiles.map { if (it.id == activeId) ProfileSwitch.kept(it, settings) else it }
+        val changed = change(current, activeId) ?: return@edit
+        prefs[Keys.profiles] = ProfilesCodec.encode(changed)
+        val before = current.firstOrNull { it.id == activeId } ?: return@edit
+        val after = changed.firstOrNull { it.id == activeId } ?: return@edit
+        if (after.kind != before.kind) {
+            prefs.writeHome(after)
+        } else {
+            prefs[Keys.profileName] = after.name
+            prefs[Keys.profileColor] = after.color
+        }
+    }
+
+    private fun MutablePreferences.writeHome(profile: Profile) {
+        val home = profile.snapshot
+        this[Keys.profileName] = profile.name
+        this[Keys.profileColor] = profile.color
+        this[Keys.appOrder] = home.appOrder.joinToString(",")
+        this[Keys.hiddenApps] = home.hiddenApps
+        this[Keys.shownApps] = home.shownApps
+        this[Keys.folders] = CustomizationJson.encodeFolders(home.folders)
+        this[Keys.showInputs] = home.showInputs
+        this[Keys.showAddTile] = home.showAddTile
+        this[Keys.showLastPlayed] = home.showLastPlayed
     }
 
     suspend fun reset() = edit { it.clear() }

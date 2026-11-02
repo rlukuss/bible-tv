@@ -16,6 +16,15 @@ import android.graphics.BitmapFactory
 import android.util.Log
 import android.util.LruCache
 import androidx.compose.ui.graphics.asImageBitmap
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import com.tcltv.sahne.data.ChildAccess
+import com.tcltv.sahne.data.FamilySeed
+import com.tcltv.sahne.data.ProfileEdits
+import com.tcltv.sahne.data.ProfileKind
+import com.tcltv.sahne.data.ProfileSwitch
+import com.tcltv.sahne.data.WhoPolicy
+import com.tcltv.sahne.data.WhoTrigger
 import com.tcltv.sahne.data.KeyAction
 import com.tcltv.sahne.data.KeyBinding
 import com.tcltv.sahne.data.KeyBindingStore
@@ -61,6 +70,7 @@ import com.tcltv.sahne.data.MediaHistory
 import com.tcltv.sahne.data.ProfilePhoto
 import com.tcltv.sahne.system.Connection
 import com.tcltv.sahne.system.HomeKeyService
+import com.tcltv.sahne.system.KidKeyState
 import com.tcltv.sahne.system.NetworkStatus
 import com.tcltv.sahne.system.SpeedTest
 import com.tcltv.sahne.system.PlayStoreUpdate
@@ -89,6 +99,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.first
@@ -98,6 +109,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.UUID
 import java.io.IOException
 import java.util.Locale
 
@@ -207,8 +219,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val apps: StateFlow<List<LaunchableApp>> = combine(allApps, settings) { apps, s -> AppCatalog.ordered(apps, s) }
+    val apps: StateFlow<List<LaunchableApp>> = combine(allApps, settings) { apps, s ->
+        ChildAccess.visible(AppCatalog.ordered(apps, s), s.activeProfile) { it.packageName }
+    }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Runs [action] now, or in a child's profile only after the parental PIN. */
+    fun asGrownUp(action: () -> Unit) {
+        if (ChildAccess.needsGrownUp(settings.value.activeProfile)) gate.requireForAdmin(R.string.pin_reason_admin, action) else action()
+    }
 
     val appsForSettings: StateFlow<List<LaunchableApp>> = combine(decoratedApps, settings) { apps, s -> AppCatalog.orderedIncludingHidden(apps, s) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -305,7 +324,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val liveTvInputs: StateFlow<List<LiveTvInput>> = liveTvCatalog.tuners
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    fun openLiveTv(input: LiveTvInput) = startSafely(liveTvCatalog.tunerIntent(input))
+    fun openLiveTv(input: LiveTvInput) = asGrownUp { startSafely(liveTvCatalog.tunerIntent(input)) }
 
     // The panel, its mini items and the grid hero show the same files, and focus moves ask again each time.
     private val artworkCache = object : LruCache<String, ImageBitmap>(ARTWORK_CACHE_BYTES) {
@@ -409,6 +428,100 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { watchForNewDevices() }
         viewModelScope.launch { runAirPlayReceiver() }
         if (localAdb.isSetUp()) HomeKeyWatchdog.schedule(application)
+    }
+
+    private val _whoVisible = MutableStateFlow(false)
+
+    /** "Who's watching?" is up: the screen shows it instead of the home screen. */
+    val whoVisible: StateFlow<Boolean> = _whoVisible.asStateFlow()
+
+    /** The TV woke from standby: ask again, and bring Matinee forward if Android lets a background app do so. */
+    private val screenOnReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (!askWho(WhoTrigger.SCREEN_ON)) return
+            startSafely(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }
+
+    // After the profile state above: the first profiles are made once, then the starting TV asks who is watching.
+    init {
+        viewModelScope.launch {
+            settingsStore.ensureProfiles(FamilySeed.parse(BuildConfig.FAMILY))
+            settings.first { it.profiles.isNotEmpty() }
+            askWho(WhoTrigger.COLD_START)
+        }
+        // The Home button service blocks most remote keys while a child watches; it runs apart, so it is told.
+        viewModelScope.launch {
+            // Not before the profiles are read: the empty settings at start would say "adult" for a moment.
+            settings.filter { it.profiles.isNotEmpty() }.map { ChildAccess.needsGrownUp(it.activeProfile) }.distinctUntilChanged()
+                .collect { KidKeyState.setChild(application, it) }
+        }
+        application.registerReceiver(screenOnReceiver, IntentFilter(Intent.ACTION_SCREEN_ON))
+    }
+
+    /** Shows "Who's watching?" when [WhoPolicy] says so; true when it is now up. */
+    fun askWho(trigger: WhoTrigger): Boolean {
+        val s = settings.value
+        if (WhoPolicy.shouldAsk(trigger, s.activeProfile?.kind, s.profiles.size)) _whoVisible.value = true
+        return _whoVisible.value
+    }
+
+    /** Back on "Who's watching?" keeps the current profile, unless there is none to go back to. */
+    fun dismissWho() {
+        if (settings.value.activeProfile != null) _whoVisible.value = false
+    }
+
+    /** Makes [profileId] the one watching (after the PIN when leaving a child's profile) and shows its home. */
+    fun pickProfile(profileId: String) {
+        val s = settings.value
+        val target = s.profiles.firstOrNull { it.id == profileId } ?: return
+        val go = {
+            viewModelScope.launch {
+                settingsStore.switchProfile(profileId)
+                _whoVisible.value = false
+            }
+            Unit
+        }
+        if (WhoPolicy.needsPin(s.activeProfile?.kind, target.kind, sameProfile = profileId == s.activeProfileId)) {
+            gate.requireForApp(R.string.pin_reason_profile, locked = true, action = go)
+        } else {
+            go()
+        }
+    }
+
+    /** Creating, opening for changes or deleting a profile asks for the PIN every time, whatever else is set. */
+    fun withProfilePin(action: () -> Unit) = gate.requireForApp(R.string.pin_reason_profile_edit, locked = true, action = action)
+
+    /** Adds an adult profile named [name] (after the PIN) and hands its id to [onAdded]. */
+    fun addProfile(name: String, onAdded: (String) -> Unit) = withProfilePin {
+        val id = UUID.randomUUID().toString()
+        viewModelScope.launch {
+            settingsStore.editProfiles { profiles, _ -> ProfileEdits.add(profiles, id, name) }
+            onAdded(id)
+        }
+    }
+
+    /** Deletes [id] after the PIN; the profile watching now and the last one are kept. */
+    fun deleteProfile(id: String, onDeleted: () -> Unit) = withProfilePin {
+        viewModelScope.launch {
+            settingsStore.editProfiles { profiles, activeId -> ProfileEdits.delete(profiles, id, activeId) }
+            onDeleted()
+        }
+    }
+
+    fun renameProfile(id: String, name: String) = update { editProfiles { p, _ -> ProfileEdits.rename(p, id, name) } }
+    fun setProfileKind(id: String, kind: ProfileKind) = update { editProfiles { p, _ -> ProfileEdits.setKind(p, id, kind) } }
+    fun setProfileColor(id: String, color: Int) = update { editProfiles { p, _ -> ProfileEdits.setColor(p, id, color) } }
+    fun toggleProfileApp(id: String, packageName: String) =
+        update { editProfiles { p, _ -> ProfileEdits.toggleAllowed(p, id, packageName) } }
+
+    /** The profiles as "Who's watching?" lists them, the active one with any name or colour given to it since. */
+    fun profilesForWho(s: LauncherSettings) =
+        s.profiles.map { if (it.id == s.activeProfileId) ProfileSwitch.kept(it, s) else it }
+
+    override fun onCleared() {
+        getApplication<Application>().unregisterReceiver(screenOnReceiver)
+        super.onCleared()
     }
 
     private val _settingsRequested = MutableStateFlow(false)
@@ -748,14 +861,18 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun launchApp(app: LaunchableApp) {
         if (app.folderId != null) {
             _openFolder.value = app.folderId
+        } else if (!ChildAccess.allows(settings.value.activeProfile, app.packageName)) {
+            return
         } else {
             gate.requireForApp(R.string.pin_reason_app, app.isLocked) { startSafely(appCatalog.launchIntent(app)) }
         }
     }
 
-    fun openInput(input: HdmiInput) = startSafely(inputCatalog.launchIntent(input.id))
+    fun openInput(input: HdmiInput) = asGrownUp { startSafely(inputCatalog.launchIntent(input.id)) }
 
-    fun openAppInfo(app: LaunchableApp) = startSafely(
+    fun openAppInfo(app: LaunchableApp) = asGrownUp { openAppInfoNow(app) }
+
+    private fun openAppInfoNow(app: LaunchableApp) = startSafely(
         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", app.packageName, null))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
     )

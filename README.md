@@ -1,90 +1,93 @@
-<p align="center">
-  <img src="play/assets/feature-graphic-1024x500.png" alt="Matinee: a calm home screen for your TV" width="820">
-</p>
+# Bible TV
 
-<p align="center">
-  A calm, ad-free home screen for Google TV and Android TV, built around your own apps.
-</p>
+Un écran d'accueil calme et sans publicité pour Android TV, avec **un verset biblique tiré au hasard** à côté de l'heure et de la météo.
 
-<p align="center">
-  <a href="https://play.google.com/apps/testing/com.yigitcan.matinee">Google Play (beta)</a> ·
-  <a href="https://github.com/Jarvis322/matinee/releases/latest">Download APK</a> ·
-  <a href="https://yigitech.dev/apps/matinee">Website</a> ·
-  <a href="https://yigitech.dev/apps/matinee/privacy">Privacy</a>
-</p>
+![Accueil avec un verset biblique](docs/screenshots/1-accueil-verset.png)
 
 ---
 
-Stock TV home screens fill most of the screen with promoted shows and ads. Matinee shows only the apps you installed, in the order you choose, and picks up where you left off.
+## Un verset à chaque coup d'œil
 
-## Two layouts
+Le verset est affiché en haut de l'écran d'accueil, juste après la ville de la météo.
 
-**Row.** The focused app's name sits large on the left, the screen takes on its colour, and your last played show appears on the right.
+- **Tiré au hasard** parmi 34 versets courts, avec la référence : Psaumes, Évangiles, Épîtres, Proverbes…
+- **Toutes les 5 minutes, un nouveau verset.** Jamais deux fois le même d'affilée.
+- **Louis Segond 1910**, une traduction du domaine public. Les versets sont dans l'application, donc **aucune connexion Internet n'est nécessaire**.
+- **Pour toute la famille.** Il s'affiche aussi sur le profil Enfants.
+- **On peut l'éteindre** dans **Paramètres → Accueil → Verset biblique**, juste sous la ville.
 
-![Row layout](play/assets/screenshots/1-home.png)
+Les versets sont dans [`Verses.kt`](app/src/main/java/com/tcltv/sahne/data/Verses.kt). Pour en ajouter, il suffit d'une ligne `Verse("texte", "Livre chapitre:verset")`. Un test vérifie que chaque verset tient sur une ligne.
 
-**Grid** (the default). A favorites shelf with every other app below it. While the shelf has focus, the last played show appears above it.
+![Interrupteur du verset dans les paramètres](docs/screenshots/2-parametres-verset.png)
 
-| | |
+## Profils de la famille
+
+- **« Qui regarde ? »** au démarrage et au réveil de la TV. Chaque personne retrouve son propre accueil : ses applis, son ordre et ses dossiers.
+- **Profil Enfants** : seulement les applis choisies par les parents, sans TV en direct ni réglages. Pour quitter le profil, il faut le code parental. Les touches de la télécommande qui mèneraient ailleurs (chaînes, Netflix…) sont bloquées.
+- **Code parental** pour créer, modifier ou supprimer un profil.
+
+| Qui regarde ? | Accueil Enfants |
 |---|---|
-| ![Grid layout with last played](play/assets/grid-light-shelf.png) | ![Grid layout, all apps](play/assets/grid-light-apps.png) |
+| ![Choix du profil](docs/screenshots/3-qui-regarde.png) | ![Accueil du profil Enfants](docs/screenshots/4-enfants.png) |
 
-Switch between them in **Settings → Home screen → Layout**.
+## Et aussi
 
-## Features
+- Uniquement **vos applis**, dans l'ordre que vous choisissez, avec la reprise de lecture.
+- **Météo** de la ville de votre choix, et horloge.
+- **Notifications** et **réseau** (nom du Wi‑Fi, test de débit) regroupés dans les Paramètres pour laisser la place au verset.
+- **Mode performance extrême** pour les petits boîtiers.
+- **Bouton Home** : un service d'accessibilité ramène sur Bible TV. Il se réactive tout seul après une mise à jour.
+- Pas de compte, pas de publicité, pas de statistiques.
 
-- **Your apps, your order.** Hold OK on a card to move it or remove it. Phone-style apps that some TV boxes ship, such as satellite or IPTV players, can be added from the app list.
-- **Make it yours.** Hold OK on a card for a menu: move, rename, change its picture, put it in a folder, lock it with a parental PIN, or hide it. Pictures are chosen as files, so Matinee needs no storage permission.
-- **Wallpapers.** Eight built-in wallpapers, an optional slowly moving light, or a picture file of your own, with a Liquid Glass look that shows the wallpaper through the shelf and menus.
-- **Parental PIN.** Lock apps, and optionally settings and home screen changes, behind a 4-digit PIN.
-- **Last played.** Title, artwork and progress from apps that share their media session. Stored only on the TV.
-- **Live TV and HDMI inputs.** TVs with a built-in antenna, cable or satellite tuner get a Live TV shortcut that opens the TV's own broadcast. Each HDMI input shows the connected device's name and whether it is on or in standby (HDMI-CEC). Rename inputs and pick an icon.
-- **At a glance.** Clock, weather for a city you choose, network name and a quick download speed test.
-- **One bell.** Play Store updates and new-device alerts in one place.
-- **Stays your home screen.** On TVs whose built-in launcher keeps Home, such as Google TV, an optional accessibility service opens Matinee when you press Home and whenever the TV brings back its own home screen. It sees only the Home key and when the built-in home screen opens, and never reads the screen.
-- **Seven languages.** English, Türkçe, Español, Français, Deutsch, 日本語 and 简体中文, switchable inside the app.
-- **No account, no ads, no analytics.**
+## Météo
 
-| Edit mode | Profile menu | Settings |
-|---|---|---|
-| ![Edit mode](play/assets/screenshots/2-edit-mode.png) | ![Profile menu](play/assets/screenshots/3-profile-menu.png) | ![Settings](play/assets/screenshots/4-settings.png) |
+La météo vient d'[Open-Meteo](https://open-meteo.com), un service gratuit qui ne demande ni compte ni clé. Il lui arrive d'être indisponible quelques minutes ou quelques heures. La pastille affiche alors **« Météo indisponible »** à côté de la ville, et Bible TV réessaie tout seul à l'intervalle choisi (Paramètres → Écran d'accueil → Mises à jour météo : 15, 30 ou 60 minutes). Il n'y a rien à faire : la température revient dès que le service répond. Les captures ci-dessus ont été prises pendant une de ces pannes.
 
-## Install
+## Appareils
 
-Matinee is in testing on Google Play:
+| Appareil | |
+|---|---|
+| Android TV et Google TV (Android 8 ou plus récent) | Oui |
+| Freebox Player POP | Oui, testé. L'accueil OQEE de Free est désactivé, pas supprimé, et peut être remis. |
+| TV LG (webOS) | Pas directement : webOS n'installe pas d'applis Android. Branchez un boîtier Android TV ou Google TV sur la TV LG et installez Bible TV dessus. |
 
-1. Join the [matinee-testers](https://groups.google.com/g/matinee-testers) group with the Google account you use on your TV.
-2. Open the [test link](https://play.google.com/apps/testing/com.yigitcan.matinee) and choose **Become a tester**.
-3. Install Matinee on your TV from the Play Store.
+## Installer avec un agent IA
 
-To sideload instead, download the APK from the [latest release](https://github.com/Jarvis322/matinee/releases/latest). Prefer Google Play if you want the Home button option: Android 13 and later block accessibility permissions for apps installed from a file, so it would not stay on.
+Donnez ce dépôt à votre agent IA (Claude Code, Codex, Cursor…) avec l'adresse IP de la TV :
 
-Requires Google TV or Android TV 8 or later.
+> Installe Bible TV sur ma TV, son adresse IP est 192.168.1.50.
 
-## After installing
+L'agent suit [AGENTS.md](AGENTS.md). Il vous demande les profils de la famille et la ville, vous dit quoi activer sur la TV, puis compile et installe tout seul. Vous n'avez que quelques réglages à faire à la télécommande : le mode développeur, autoriser l'ordinateur, le code parental.
 
-Open Matinee once, then go to **Settings** (the profile button at the top right, then **Settings**).
+## Installer à la main
 
-1. **Make Matinee the home screen.** Go to **Home screen → Default home screen** and choose Matinee in the TV's dialog.
-   Google TV and some other TVs don't let you change the default home app, so do step 2 as well.
-2. **Turn on the Home button.** Go to **Home screen → Home button opens Matinee** and read the explanation. On the TV's accessibility screen that opens, choose **Matinee Home button** and turn it on.
-   From then on, pressing Home, waking or restarting the TV, and backing out of an app all land on Matinee.
-   This needs the Google Play version on Android 13 and later.
-3. **Allow notification access.** Go to **Home screen → Notification access** and turn it on for Matinee. This powers last played, the AirPlay and Chromecast status, and Play Store update alerts.
-4. **Optional.** Pick your weather city and profile name under **Home screen**. Switch the layout or card style there too. Change the language under **About → Language**.
-
-If the TV's accessibility list ever shows **Matinee Home button** as off while it is on, turn it off and on again.
-
-## Build
-
-Kotlin and Jetpack Compose. You need JDK 17 or later and the Android SDK (compile SDK 35).
+Avec JDK 17 et le SDK Android (compile SDK 35, NDK 29 et CMake 3.31 pour le récepteur AirPlay) :
 
 ```bash
-./gradlew assembleDebug
-adb install app/build/outputs/apk/debug/app-debug.apk
+tools/install.sh 192.168.1.50
 ```
 
+Sur une Freebox Player POP, ajoutez `--disable-free-launcher` pour couper l'accueil de Free. `tools/restore-free-launcher.sh 192.168.1.50` le remet.
 
-## License
+### Votre famille et votre ville
 
-[MIT](LICENSE) © Yiğit Can Polat · [yigitech.dev](https://yigitech.dev) · [x.com/yigitech](https://x.com/yigitech)
+Créez un fichier `family.properties` à la racine du projet. Il est ignoré par git et ne sera donc jamais publié.
+
+```properties
+profile.1=Paul|adult
+profile.2=Marie|adult
+profile.3=Enfants|child|com.google.android.youtube.tvkids,com.disney.disneyplus
+city=Lyon|45.764|4.8357
+```
+
+- `adult` : accès à toutes les applis.
+- `child` : uniquement les applis listées (noms de paquet séparés par des virgules).
+- `city=` : nom de la ville, latitude et longitude pour la météo. Sans cette ligne, c'est Paris.
+
+Ensuite, réglez le code parental dans **Paramètres → Contrôle parental**.
+
+## Origine et licence
+
+Bible TV est construit à partir de [Matinee](https://github.com/Jarvis322/matinee) de Yiğit Can Polat, sous licence [MIT](LICENSE). La licence d'origine est conservée.
+
+Versets : Louis Segond 1910, domaine public.

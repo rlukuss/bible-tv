@@ -54,6 +54,7 @@
 
     <!-- Settings navigation -->
     <string name="settings_title">Paramètres</string>
+    <string name="settings_notifications_sub">Alertes et mises à jour</string>
     <string name="settings_network">Réseau et Internet</string>
     <string name="settings_network_sub">Wi‑Fi et connexion</string>
     <string name="settings_display_sound">Affichage et son</string>
@@ -105,6 +106,7 @@
     <string name="setting_greeting">Message d\'accueil</string>
     <string name="setting_widget_clock">Heure et date</string>
     <string name="setting_widget_weather">Météo</string>
+    <string name="setting_widget_verse">Verset biblique</string>
     <string name="setting_unit">Unité de température</string>
     <string name="unit_celsius">°C</string>
     <string name="unit_fahrenheit">°F</string>
@@ -313,6 +315,30 @@
     <string name="tagline_folder">Un dossier d\'applis</string>
     <string name="pin_reason_app">Cette appli est verrouillée</string>
     <string name="pin_reason_admin">Saisissez le code PIN pour continuer</string>
+    <string name="pin_reason_profile">Saisissez le code PIN pour changer de profil</string>
+    <string name="who_title">Qui regarde ?</string>
+    <string name="who_change_profile">Changer de profil</string>
+    <string name="pin_reason_profile_edit">Saisissez le code PIN pour modifier les profils</string>
+    <string name="setting_profiles">Profils</string>
+    <string name="setting_profiles_sub">Qui regarde, chacun avec son accueil</string>
+    <string name="profiles_count">%1$d profils</string>
+    <string name="profile_add">Ajouter un profil</string>
+    <string name="profile_new_name">Nouveau profil</string>
+    <string name="profile_watching">Regarde en ce moment</string>
+    <string name="profile_first_name">Prénom</string>
+    <string name="profile_kind">Type</string>
+    <string name="profile_kind_adult">Adulte</string>
+    <string name="profile_kind_child">Enfant</string>
+    <string name="profile_allowed_apps">Applis autorisées</string>
+    <string name="profile_allowed_count">%1$d applis</string>
+    <string name="profile_delete">Supprimer ce profil</string>
+    <string name="profile_delete_confirm">Appuyez encore pour supprimer</string>
+    <string name="note_profile_kept">Le profil qui regarde en ce moment et le dernier profil ne peuvent pas être supprimés. Changez de profil d\'abord.</string>
+    <string name="note_child_apps">Seules ces applis s\'affichent sur l\'accueil de cet enfant. Tout le reste de la TV demande le code PIN.</string>
+    <string name="note_profiles_need_pin">Choisissez un code PIN dans Contrôle parental : sans lui, on peut quitter un profil enfant librement.</string>
+    <string name="note_child_keys_off">La télécommande n’est pas protégée : activez « Le bouton Accueil ouvre Matinee » dans Écran d’accueil pour que les boutons chaînes, Assistant et applis ne fassent rien pour un enfant.</string>
+    <string name="setting_extreme_performance">Performance extrême</string>
+    <string name="setting_extreme_performance_sub">Pour les TV lentes : ni verre, ni lumière animée, ni animation, ni image de fond. Désactivé, on revient aux réglages d\'origine de cette TV.</string>
     <string name="pin_wrong">Code PIN incorrect</string>
     <string name="pin_mismatch">Les codes PIN ne correspondent pas. Réessayez.</string>
     <string name="pin_locked">Trop d\'essais. Attendez %1$d s.</string>
@@ -397,7 +423,7 @@
     </plurals>
     <string name="pin_new_title_directions">Choisissez 4 étapes avec les flèches</string>
     <string name="setting_licenses">Licences</string>
-    <string name="license_text">Données météo fournies par Open‑Meteo.com, sous licence CC BY 4.0.\nIcônes : Tabler Icons, licence MIT.\nPolice : Inter, SIL Open Font License 1.1.\nLes icônes et bannières d\'applis appartiennent à leurs applis respectives.\nAirPlay: UxPlay, GPL-3.0; libplist, LGPL-2.1; OpenSSL and Apple ALAC, Apache-2.0.\nADB: dadb, Apache-2.0.\nSource code: github.com/Jarvis322/matinee</string>
+    <string name="license_text">Données météo fournies par Open‑Meteo.com, sous licence CC BY 4.0.\nIcônes : Tabler Icons, licence MIT.\nPolice : Inter, SIL Open Font License 1.1.\nLes icônes et bannières d\'applis appartiennent à leurs applis respectives.\nAirPlay: UxPlay, GPL-3.0; libplist, LGPL-2.1; OpenSSL and Apple ALAC, Apache-2.0.\nADB: dadb, Apache-2.0.</string>
     <string name="setting_add_app">Ajouter une appli à l\'écran d\'accueil</string>
     <string name="setting_add_app_sub">Applis masquées ou pas encore sur l\'écran d\'accueil</string>
     <string name="setting_show_add_tile">Afficher la tuile Ajouter une appli</string>

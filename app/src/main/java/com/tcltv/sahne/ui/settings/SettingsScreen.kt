@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -52,6 +53,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
@@ -125,6 +127,8 @@ import com.tcltv.sahne.ui.TintedIcon
 import com.tcltv.sahne.ui.glass
 import com.tcltv.sahne.ui.home.CinematicBackground
 import com.tcltv.sahne.ui.home.NeutralAccent
+import com.tcltv.sahne.ui.home.NetworkDetails
+import com.tcltv.sahne.ui.home.NotificationList
 import com.tcltv.sahne.ui.home.TopBar
 import com.tcltv.sahne.ui.home.profileColorCount
 import com.tcltv.sahne.ui.interStyle
@@ -133,6 +137,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private enum class Section(@StringRes val title: Int, @StringRes val subtitle: Int, @DrawableRes val icon: Int) {
+    NOTIFICATIONS(R.string.notifications_title, R.string.settings_notifications_sub, R.drawable.ic_bell),
     NETWORK(R.string.settings_network, R.string.settings_network_sub, R.drawable.ic_wifi),
     DISPLAY_SOUND(R.string.settings_display_sound, R.string.settings_display_sound_sub, R.drawable.ic_device_desktop),
     APPS(R.string.settings_apps, R.string.settings_apps_sub, R.drawable.ic_layout_grid),
@@ -155,6 +160,18 @@ private sealed interface SubPage {
     data object Licenses : SubPage
     data object LockedApps : SubPage
     data object Wallpaper : SubPage
+    data object Profiles : SubPage
+    data class ProfileEditor(val profileId: String) : SubPage
+    data class ProfileRename(val profileId: String) : SubPage
+    data class ProfileApps(val profileId: String) : SubPage
+}
+
+/** Back from a profile's own pages climbs to the profile, then to the list; every other page goes back to its section. */
+private fun SubPage.parent(): SubPage? = when (this) {
+    is SubPage.ProfileEditor -> SubPage.Profiles
+    is SubPage.ProfileRename -> SubPage.ProfileEditor(profileId)
+    is SubPage.ProfileApps -> SubPage.ProfileEditor(profileId)
+    else -> null
 }
 
 private val Divider = Color.White.copy(alpha = 0.06f)
@@ -181,7 +198,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onEditApps
     var returningFrom by remember { mutableStateOf<SubPage?>(null) }
     fun closePage() {
         returningFrom = subPage
-        subPage = null
+        subPage = subPage?.parent()
     }
     // Once the section's rows are back, focus returns to the one that opened the page instead of being lost.
     LaunchedEffect(subPage, returningFrom) {
@@ -204,11 +221,14 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onEditApps
 
         Header(section, Modifier.padding(start = 48.dp, top = 88.dp))
 
-        Column(Modifier.padding(start = 48.dp, top = 140.dp).width(291.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        val unread by viewModel.unreadNotices.collectAsStateWithLifecycle()
+        // Eleven sections: rows a touch tighter so the list still ends above the key hints.
+        Column(Modifier.padding(start = 48.dp, top = 140.dp).width(291.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Section.entries.forEach { item ->
                 NavItem(
                     section = item,
                     selected = item == section,
+                    badge = if (item == Section.NOTIFICATIONS) unread else 0,
                     focusRequester = navRequesters.getValue(item),
                     onFocused = {
                         section = item
@@ -248,6 +268,10 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onEditApps
                     SubPage.Licenses -> stringResource(R.string.setting_licenses)
                     SubPage.LockedApps -> stringResource(R.string.setting_locked_apps)
                     SubPage.Wallpaper -> stringResource(R.string.setting_wallpaper)
+                    SubPage.Profiles -> stringResource(R.string.setting_profiles)
+                    is SubPage.ProfileEditor -> profileName(viewModel, page.profileId)
+                    is SubPage.ProfileRename -> stringResource(R.string.profile_first_name)
+                    is SubPage.ProfileApps -> stringResource(R.string.profile_allowed_apps)
                     is SubPage.InputEditor -> stringResource(R.string.edit_input)
                     is SubPage.KeyEditor -> keyName(page.keyCode)
                 },
@@ -265,10 +289,21 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onEditApps
                 SubPage.Licenses -> LicensesPage(panelRequester)
                 SubPage.LockedApps -> LockedAppsPage(viewModel, panelRequester)
                 SubPage.Wallpaper -> WallpaperPage(viewModel, panelRequester)
+                SubPage.Profiles -> ProfilesPage(viewModel, panelRequester) { subPage = SubPage.ProfileEditor(it) }
+                is SubPage.ProfileEditor -> ProfileEditorPage(
+                    viewModel,
+                    page.profileId,
+                    panelRequester,
+                    rename = { subPage = SubPage.ProfileRename(page.profileId) },
+                    chooseApps = { subPage = SubPage.ProfileApps(page.profileId) },
+                    onDeleted = { subPage = SubPage.Profiles },
+                )
+                is SubPage.ProfileRename -> ProfileRenamePage(viewModel, page.profileId, panelRequester)
+                is SubPage.ProfileApps -> ProfileAppsPage(viewModel, page.profileId, panelRequester)
             }
         }
 
-        Row(Modifier.padding(start = 48.dp, top = 494.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(start = 48.dp, top = 500.dp), verticalAlignment = Alignment.CenterVertically) {
             Hint("◀", stringResource(R.string.hint_back))
             Spacer(Modifier.width(16.dp))
             Hint("▲▼", stringResource(R.string.hint_navigate))
@@ -311,6 +346,7 @@ private fun Header(section: Section, modifier: Modifier) {
 private fun NavItem(
     section: Section,
     selected: Boolean,
+    badge: Int,
     focusRequester: FocusRequester,
     onFocused: () -> Unit,
     onClick: () -> Unit,
@@ -321,7 +357,7 @@ private fun NavItem(
     Row(
         Modifier
             .fillMaxWidth()
-            .height(33.dp)
+            .height(31.dp)
             .then(
                 when {
                     highlighted -> Modifier.glass(CircleShape, GlassStyle.Bright)
@@ -363,6 +399,15 @@ private fun NavItem(
             style = interStyle(14.sp, if (highlighted) 600 else 500, label),
             modifier = Modifier.weight(1f),
         )
+        if (badge > 0) {
+            Box(
+                Modifier.heightIn(min = 16.dp).widthIn(min = 16.dp).background(Palette.Amber, CircleShape).padding(horizontal = 5.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                BasicText(if (badge > 9) "9+" else badge.toString(), style = interStyle(10.5.sp, 700, Palette.OnAmber))
+            }
+            Spacer(Modifier.width(6.dp))
+        }
         if (highlighted) TintedIcon(R.drawable.ic_chevron_right, 12.dp, Palette.Background.copy(alpha = 0.6f))
     }
 }
@@ -384,10 +429,21 @@ private fun SectionContent(
     open: (SubPage) -> Unit,
 ) {
     when (section) {
+        Section.NOTIFICATIONS -> NotificationList(viewModel, firstRow)
         Section.NETWORK -> SystemPanel(
             viewModel,
             firstRow,
             listOf(SystemLink(R.string.system_network, R.string.system_network_sub, Settings.ACTION_WIFI_SETTINGS)),
+            extra = {
+                val connection by viewModel.connection.collectAsStateWithLifecycle()
+                val speed by viewModel.speed.collectAsStateWithLifecycle()
+                // The speed is measured while this section is shown, as it was while the bar's Wi-Fi button had focus.
+                DisposableEffect(Unit) {
+                    viewModel.onNetworkFocusChanged(true)
+                    onDispose { viewModel.onNetworkFocusChanged(false) }
+                }
+                Box(Modifier.padding(vertical = 8.dp)) { NetworkDetails(connection, speed) }
+            },
         )
         Section.DISPLAY_SOUND -> SystemPanel(
             viewModel,
@@ -529,14 +585,12 @@ private fun HomePanel(viewModel: LauncherViewModel, firstRow: FocusRequester, on
             viewModel.update { setUse24Hour(!s.use24Hour) }
         }
         ValueRow(R.string.setting_city, null, s.weatherLocation.name.substringBefore(','), Modifier.opensPage(SubPage.CitySearch)) { open(SubPage.CitySearch) }
+        ToggleRow(R.string.setting_widget_verse, null, s.showVerse) { viewModel.update { setShowVerse(it) } }
         ValueRow(R.string.setting_app_order, R.string.setting_app_order_sub, null, onClick = onEditApps)
         ToggleRow(R.string.setting_widget_inputs, R.string.setting_widget_inputs_sub, s.showInputs) { viewModel.update { setShowInputs(it) } }
         ValueRow(R.string.setting_memory_warning, R.string.setting_memory_warning_sub, stringResource(R.string.percent_value, s.memoryThresholdPercent)) {
             val next = when (s.memoryThresholdPercent) { 70 -> 80; 80 -> 90; else -> 70 }
             viewModel.update { setMemoryThreshold(next) }
-        }
-        ToggleRow(R.string.setting_notifications, R.string.setting_notifications_sub, s.showNotifications) {
-            viewModel.update { setShowNotifications(it) }
         }
         NotificationAccessRow(viewModel)
         ToggleRow(
@@ -572,9 +626,18 @@ private fun HomePanel(viewModel: LauncherViewModel, firstRow: FocusRequester, on
         ) { viewModel.update { setShowAirPlay(it) } }
         ToggleRow(R.string.setting_widget_memory, null, s.showMemory) { viewModel.update { setShowMemory(it) } }
         ToggleRow(R.string.setting_chromecast, R.string.setting_chromecast_sub, s.showChromecast) { viewModel.update { setShowChromecast(it) } }
-        ValueRow(R.string.setting_profile_name, null, s.profileName.ifBlank { stringResource(R.string.not_set) }, Modifier.opensPage(SubPage.ProfileName)) { open(SubPage.ProfileName) }
+        ValueRow(
+            R.string.setting_profiles,
+            R.string.setting_profiles_sub,
+            stringResource(R.string.profiles_count, s.profiles.size),
+            Modifier.opensPage(SubPage.Profiles),
+        ) { open(SubPage.Profiles) }
+        // The watching profile's name and colour: changing a profile asks for the PIN, as in the profiles page.
+        ValueRow(R.string.setting_profile_name, null, s.profileName.ifBlank { stringResource(R.string.not_set) }, Modifier.opensPage(SubPage.ProfileName)) {
+            viewModel.withProfilePin { open(SubPage.ProfileName) }
+        }
         ValueRow(R.string.setting_profile_color, null, stringResource(R.string.color_number, s.profileColor.mod(profileColorCount) + 1)) {
-            viewModel.update { setProfileColor((s.profileColor + 1).mod(profileColorCount)) }
+            viewModel.withProfilePin { viewModel.update { setProfileColor((s.profileColor + 1).mod(profileColorCount)) } }
         }
         InfoRow(
             R.string.setting_profile_photo,
@@ -635,6 +698,9 @@ private fun DevicePanel(viewModel: LauncherViewModel, firstRow: FocusRequester, 
             ).filterNotNull().joinToString(" · "),
         )
         InfoRow(R.string.setting_performance, R.string.setting_performance_sub, stringResource(profile.tier.label))
+        ToggleRow(R.string.setting_extreme_performance, R.string.setting_extreme_performance_sub, s.extremePerformance) {
+            viewModel.update { setExtremePerformance(it) }
+        }
         ValueRow(
             R.string.setting_clean_now,
             R.string.setting_clean_now_sub,
@@ -715,7 +781,7 @@ private fun LanguagePage(firstRow: FocusRequester) {
     }
 }
 
-/** Who made Matinee and where to find them: a TV has no browser to open links in, so they are shown, not linked. */
+/** Who made this build of Matinee. */
 @Composable
 private fun Credits() {
     var focused by remember { mutableStateOf(false) }
@@ -741,34 +807,10 @@ private fun Credits() {
                 BasicText(stringResource(R.string.credits_made_by, DEVELOPER_NAME), style = interStyle(12.sp, 500, Palette.TextSecondary))
             }
         }
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CreditChip(R.drawable.ic_world, DEVELOPER_SITE)
-            CreditChip(R.drawable.ic_brand_x, DEVELOPER_X)
-            CreditChip(R.drawable.ic_brand_github, DEVELOPER_GITHUB)
-        }
     }
 }
 
-@Composable
-private fun CreditChip(@DrawableRes icon: Int, label: String) {
-    Row(
-        Modifier
-            .background(Color.White.copy(alpha = 0.1f), CircleShape)
-            .border(1.dp, Color.White.copy(alpha = 0.14f), CircleShape)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Image(painterResource(icon), contentDescription = null, colorFilter = ColorFilter.tint(Palette.TextPrimary), modifier = Modifier.size(15.dp))
-        Spacer(Modifier.width(7.dp))
-        BasicText(label, maxLines = 1, style = interStyle(12.5.sp, 650))
-    }
-}
-
-private const val DEVELOPER_NAME = "Yiğit Can Polat"
-private const val DEVELOPER_SITE = "yigitech.dev"
-private const val DEVELOPER_X = "@yigitech"
-private const val DEVELOPER_GITHUB = "github.com/Jarvis322/matinee"
+private const val DEVELOPER_NAME = "Randy LUKUSA"
 
 @Composable
 private fun LicensesPage(firstRow: FocusRequester) {
@@ -1161,7 +1203,7 @@ private fun ToggleRow(
 ) = ToggleRow(stringResource(label), subtitle?.let { stringResource(it) }, checked, modifier, onToggle)
 
 @Composable
-private fun ToggleRow(label: String, subtitle: String?, checked: Boolean, modifier: Modifier = Modifier, onToggle: (Boolean) -> Unit) {
+internal fun ToggleRow(label: String, subtitle: String?, checked: Boolean, modifier: Modifier = Modifier, onToggle: (Boolean) -> Unit) {
     val on = stringResource(R.string.switch_on)
     val off = stringResource(R.string.switch_off)
     FocusRow(

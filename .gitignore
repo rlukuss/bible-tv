@@ -27,3 +27,7 @@ app/src/main/assets/wallpapers/
 # Built by scripts/build-openssl.sh
 app/src/main/cpp/openssl/
 .cxx/
+
+# The family's first names and apps (family.properties) and API keys (secrets.properties) stay on this machine
+family.properties
+secrets.properties

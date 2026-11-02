@@ -21,6 +21,8 @@ android {
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
+        // The family's first profiles (see FamilySeed); the file stays on this machine, out of git.
+        buildConfigField("String", "FAMILY", javaString(familyLines()))
     }
 
     // The AirPlay receiver is UxPlay's protocol library (C); see app/src/main/cpp/uxplay/SOURCE.txt.
@@ -74,6 +76,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     // The in-app language switch needs every language on the device, so Play must not split by language.
@@ -99,4 +102,28 @@ dependencies {
     implementation("dev.mobile:dadb:2.0.0")
 
     testImplementation("junit:junit:4.13.2")
+    // Android's org.json is only a stub in unit tests; the profile codec is tested against the real library.
+    testImplementation("org.json:json:20231013")
+}
+
+/** The `profile.N=…` lines of family.properties at the repository's root, or nothing when there is no such file. */
+fun familyLines(): String {
+    val file = rootProject.file("family.properties")
+    if (!file.isFile) return ""
+    return file.readLines(Charsets.UTF_8).map { it.trim() }.filter { it.startsWith("profile.") || it.startsWith("city=") }.joinToString("\n")
+}
+
+/** A Java string literal; non-ASCII letters are escaped so accented first names survive any source encoding. */
+fun javaString(value: String): String = buildString {
+    append('"')
+    value.forEach { c ->
+        when {
+            c == '"' -> append("\\\"")
+            c == '\\' -> append("\\\\")
+            c == '\n' -> append("\\n")
+            c.code < 0x20 || c.code > 0x7e -> append("\\u%04x".format(c.code))
+            else -> append(c)
+        }
+    }
+    append('"')
 }

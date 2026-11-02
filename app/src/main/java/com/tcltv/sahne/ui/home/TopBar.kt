@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -46,10 +44,12 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -65,10 +65,11 @@ import com.tcltv.sahne.Notice
 import com.tcltv.sahne.SpeedState
 import com.tcltv.sahne.R
 import com.tcltv.sahne.WeatherUiState
-import android.provider.Settings
 import com.tcltv.sahne.system.Connection
 import com.tcltv.sahne.system.ReceiverState
 import com.tcltv.sahne.data.TemperatureUnit
+import com.tcltv.sahne.data.Verses
+import com.tcltv.sahne.data.WhoTrigger
 import com.tcltv.sahne.ui.GlassStyle
 import com.tcltv.sahne.ui.LocalReduceMotion
 import com.tcltv.sahne.ui.Palette
@@ -85,31 +86,14 @@ import kotlin.math.roundToInt
 @Composable
 internal fun TopBar(viewModel: LauncherViewModel, onOpenSettings: () -> Unit, modifier: Modifier) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    var notificationsOpen by remember { mutableStateOf(false) }
     var profileOpen by remember { mutableStateOf(false) }
     Box(modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
             if (settings.showClock || settings.showWeather) {
                 ClockWeatherPill(viewModel, onOpenSettings)
             }
-            Spacer(Modifier.weight(1f))
-            if (settings.showNotifications) {
-                // Each popup lives in its button's box so it opens right under that circle.
-                Box {
-                    BellButton(viewModel, open = notificationsOpen) {
-                        notificationsOpen = true
-                        viewModel.markNoticesSeen()
-                    }
-                    if (notificationsOpen) {
-                        MenuPopup(onDismiss = { notificationsOpen = false }) {
-                            NotificationPanel(viewModel, onClose = { notificationsOpen = false })
-                        }
-                    }
-                }
-                Spacer(Modifier.width(8.dp))
-            }
-            WifiButton(viewModel)
-            Spacer(Modifier.width(8.dp))
+            Box(Modifier.weight(1f).padding(horizontal = 8.dp)) { if (settings.showVerse) VersePill() }
+            // Notifications and the network live in Settings, which leaves the bar's width to the verse.
             Box {
                 ProfileButton(viewModel, open = profileOpen) { profileOpen = true }
                 if (profileOpen) {
@@ -119,6 +103,10 @@ internal fun TopBar(viewModel: LauncherViewModel, onOpenSettings: () -> Unit, mo
                             onOpenSettings = {
                                 profileOpen = false
                                 onOpenSettings()
+                            },
+                            onChangeProfile = {
+                                profileOpen = false
+                                viewModel.askWho(WhoTrigger.PROFILE_MENU)
                             },
                         )
                     }
@@ -193,6 +181,38 @@ private fun ClockWeatherPill(viewModel: LauncherViewModel, onOpenSettings: () ->
     }
 }
 
+/** A random verse after the city, changed every few minutes. Not focusable: it is only there to be read. */
+@Composable
+private fun VersePill() {
+    var index by remember { mutableStateOf(Verses.next(-1)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(VERSE_MINUTES * 60_000L)
+            index = Verses.next(index)
+        }
+    }
+    val verse = Verses.ALL[index]
+    // Two short lines when needed: on one line the bar's middle cut most verses off halfway.
+    val text = buildAnnotatedString {
+        append("« ${verse.text} »  ")
+        // No-break spaces keep "1 Corinthiens 13:4" together on the second line.
+        withStyle(SpanStyle(color = Palette.TextSecondary)) { append(verse.reference.replace(' ', ' ')) }
+    }
+    Box(
+        Modifier.height(32.dp).glass(CircleShape, GlassStyle.Pill).padding(horizontal = 16.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        BasicText(
+            text,
+            style = interStyle(10.5.sp, 500).copy(lineHeight = 13.sp),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+private const val VERSE_MINUTES = 5
+
 /**
  * The current time, kept fresh by the system's own minute tick and by the screen turning on. A plain delay isn't
  * enough: its clock stops while the TV sleeps in standby, so after waking the time it showed was the time it slept.
@@ -242,7 +262,10 @@ private val ProfileColors = listOf(
 
 internal val profileColorCount: Int get() = ProfileColors.size
 
-private fun initialsOf(name: String): String =
+/** The avatar colour at [index], as the profile settings number them. */
+internal fun profileColor(index: Int): Color = ProfileColors[index.mod(ProfileColors.size)]
+
+internal fun initialsOf(name: String): String =
     name.split(' ').filter { it.isNotBlank() }.take(2).joinToString("") { it.take(1) }.uppercase(Locale.getDefault())
 
 @Composable
@@ -304,7 +327,7 @@ private fun greetingWithNameRes(hour: Int): Int = when (hour) {
 }
 
 @Composable
-private fun ProfileMenu(viewModel: LauncherViewModel, onOpenSettings: () -> Unit) {
+private fun ProfileMenu(viewModel: LauncherViewModel, onOpenSettings: () -> Unit, onChangeProfile: () -> Unit) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val airPlay by viewModel.airPlay.collectAsStateWithLifecycle()
     val cast by viewModel.googleCast.collectAsStateWithLifecycle()
@@ -316,6 +339,7 @@ private fun ProfileMenu(viewModel: LauncherViewModel, onOpenSettings: () -> Unit
 
     // Receiver rows only report status, so focus starts on the first row that does something.
     val rows = buildList {
+        if (settings.profiles.size > 1) add("profile")
         if (settings.showMemory) add("memory")
         add("settings")
     }
@@ -338,6 +362,16 @@ private fun ProfileMenu(viewModel: LauncherViewModel, onOpenSettings: () -> Unit
             )
         }
         MenuDivider()
+        if (settings.profiles.size > 1) {
+            MenuRow(
+                icon = R.drawable.ic_user,
+                title = stringResource(R.string.who_change_profile),
+                modifier = focusFor("profile"),
+                onClick = onChangeProfile,
+                trailing = { TintedIcon(R.drawable.ic_chevron_right, 12.dp, Palette.TextSecondary) },
+            )
+            MenuDivider()
+        }
         if (settings.showAirPlay) {
             ReceiverRow(R.drawable.ic_device_tv, stringResource(R.string.airplay), airPlay.state, airPlayLabels())
         }
@@ -469,57 +503,18 @@ private fun MenuDivider() {
     Box(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 5.dp).height(1.dp).background(Color.White.copy(alpha = 0.08f)))
 }
 
+/** The notices, shown in Settings' own Notifications section; [firstFocus] is the row the menu's Right moves to. */
 @Composable
-private fun BellButton(viewModel: LauncherViewModel, open: Boolean, onClick: () -> Unit) {
-    val unread by viewModel.unreadNotices.collectAsStateWithLifecycle()
-    var focused by remember { mutableStateOf(false) }
-    val highlighted = focused || open
-    val description = pluralStringResource(R.plurals.a11y_notifications, unread, unread)
-    Box {
-        Box(
-            Modifier
-                .size(32.dp)
-                .glass(CircleShape, if (highlighted) GlassStyle.Bright else GlassStyle.Pill)
-                .onFocusChanged { focused = it.isFocused }
-                .semantics { contentDescription = description }
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            TintedIcon(R.drawable.ic_bell, 15.dp, if (highlighted) Palette.Background else Palette.TextPrimary)
-        }
-        if (unread > 0) {
-            Box(
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = 4.dp, y = (-4).dp)
-                    .heightIn(min = 15.dp)
-                    .widthIn(min = 15.dp)
-                    .background(Palette.Amber, CircleShape)
-                    .padding(horizontal = 4.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                BasicText(if (unread > 9) "9+" else unread.toString(), style = interStyle(10.5.sp, 700, Palette.OnAmber))
-            }
-        }
-    }
-}
-
-@Composable
-private fun NotificationPanel(viewModel: LauncherViewModel, onClose: () -> Unit) {
+internal fun NotificationList(viewModel: LauncherViewModel, firstFocus: FocusRequester) {
     val notices by viewModel.notices.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val firstFocus = remember { FocusRequester() }
     val hasAccess = remember { viewModel.hasNotificationAccess() }
-    LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
+    val onClose = {}
+    LaunchedEffect(Unit) { viewModel.markNoticesSeen() }
 
-    Column(
-        Modifier
-            .width(300.dp)
-            .glass(RoundedCornerShape(22.dp), GlassStyle.Dense)
-            .padding(14.dp),
-    ) {
+    Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            BasicText(stringResource(R.string.notifications_title), style = interStyle(14.sp, 700), modifier = Modifier.weight(1f))
+            Spacer(Modifier.weight(1f))
             if (notices.isNotEmpty()) {
                 SmallTextButton(stringResource(R.string.notifications_clear_all)) { viewModel.clearNotices() }
             }
@@ -532,7 +527,7 @@ private fun NotificationPanel(viewModel: LauncherViewModel, onClose: () -> Unit)
                 notice = notice,
                 modifier = if (index == 0) Modifier.focusRequester(firstFocus) else Modifier,
             ) {
-                viewModel.openNotice(notice)
+                viewModel.asGrownUp { viewModel.openNotice(notice) }
                 onClose()
             }
         }
@@ -547,7 +542,7 @@ private fun NotificationPanel(viewModel: LauncherViewModel, onClose: () -> Unit)
                 action = stringResource(R.string.notice_action_play),
                 modifier = Modifier.padding(top = 4.dp),
             ) {
-                viewModel.openPlayUpdates()
+                viewModel.asGrownUp { viewModel.openPlayUpdates() }
                 onClose()
             }
         }
@@ -667,68 +662,7 @@ private fun SmallTextButton(label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun WifiButton(viewModel: LauncherViewModel) {
-    val state by viewModel.connection.collectAsStateWithLifecycle()
-    val speed by viewModel.speed.collectAsStateWithLifecycle()
-    val connection = state
-    var focused by remember { mutableStateOf(false) }
-    val icon = when (connection) {
-        Connection.Offline, Connection.NoInternet -> R.drawable.ic_wifi_off
-        Connection.Ethernet -> R.drawable.ic_network
-        is Connection.Wifi -> when (connection.bars) {
-            0 -> R.drawable.ic_wifi_0
-            1 -> R.drawable.ic_wifi_1
-            2 -> R.drawable.ic_wifi_2
-            else -> R.drawable.ic_wifi
-        }
-    }
-    val description = stringResource(
-        when (connection) {
-            Connection.Offline -> R.string.network_offline
-            Connection.NoInternet -> R.string.network_no_internet
-            Connection.Ethernet -> R.string.network_ethernet
-            is Connection.Wifi -> R.string.network_wifi
-        },
-    )
-    // Offline is the one state worth a warning color; otherwise the icon shape carries the state.
-    val problem = connection == Connection.Offline || connection == Connection.NoInternet
-    Box {
-        Box(
-            Modifier
-                .size(32.dp)
-                .glass(CircleShape, if (focused) GlassStyle.Bright else GlassStyle.Pill)
-                .onFocusChanged {
-                    focused = it.isFocused
-                    viewModel.onNetworkFocusChanged(it.isFocused)
-                }
-                .semantics { contentDescription = description }
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                    viewModel.openSystemSettings(Settings.ACTION_WIFI_SETTINGS)
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            TintedIcon(
-                icon,
-                15.dp,
-                when {
-                    focused -> Palette.Background
-                    problem -> Palette.Warning
-                    else -> Palette.TextPrimary
-                },
-            )
-        }
-        if (focused) {
-            val offsetY = with(LocalDensity.current) { 42.dp.roundToPx() }
-            // Not focusable: the details follow focus and must never steal it from the remote.
-            Popup(alignment = Alignment.TopEnd, offset = IntOffset(0, offsetY), properties = PopupProperties(focusable = false)) {
-                NetworkDetails(connection, speed)
-            }
-        }
-    }
-}
-
-@Composable
-private fun NetworkDetails(connection: Connection, speed: SpeedState) {
+internal fun NetworkDetails(connection: Connection, speed: SpeedState) {
     val name = when (connection) {
         Connection.Offline -> stringResource(R.string.network_details_offline)
         Connection.NoInternet -> stringResource(R.string.network_details_no_internet)

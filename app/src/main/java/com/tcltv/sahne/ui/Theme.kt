@@ -43,3 +43,6 @@ fun interStyle(size: TextUnit, weight: Int, color: Color = Palette.TextPrimary, 
     TextStyle(fontFamily = Inter, fontSize = size, fontWeight = FontWeight(weight), color = color, letterSpacing = letterSpacing)
 
 val LocalReduceMotion = staticCompositionLocalOf { false }
+
+/** Extreme performance: the background is a plain colour, with no picture to render or show through the glass. */
+val LocalExtremePerformance = staticCompositionLocalOf { false }

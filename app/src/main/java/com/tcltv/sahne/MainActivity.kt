@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.runtime.mutableIntStateOf
 import com.tcltv.sahne.data.AppLanguage
+import com.tcltv.sahne.system.KidKeyState
 
 class MainActivity : ComponentActivity() {
 
@@ -41,11 +42,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        KidKeyState.setMatineeInFront(this, true)
         viewModel.onHomeResumed()
         resumeTick.intValue++
     }
 
     override fun onPause() {
+        KidKeyState.setMatineeInFront(this, false)
         viewModel.gate.endAdminSession()
         viewModel.onHomePaused()
         super.onPause()

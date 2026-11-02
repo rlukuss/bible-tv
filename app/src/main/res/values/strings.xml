@@ -56,6 +56,7 @@
 
     <!-- Settings navigation -->
     <string name="settings_title">Settings</string>
+    <string name="settings_notifications_sub">Alerts and updates</string>
     <string name="settings_network">Network and internet</string>
     <string name="settings_network_sub">Wi‑Fi and connection</string>
     <string name="settings_display_sound">Display and sound</string>
@@ -107,6 +108,7 @@
     <string name="setting_greeting">Greeting</string>
     <string name="setting_widget_clock">Clock and date</string>
     <string name="setting_widget_weather">Weather</string>
+    <string name="setting_widget_verse">Bible verse</string>
     <string name="setting_unit">Temperature unit</string>
     <string name="unit_celsius">°C</string>
     <string name="unit_fahrenheit">°F</string>
@@ -322,6 +324,30 @@
     <string name="tagline_folder">A folder of apps</string>
     <string name="pin_reason_app">This app is locked</string>
     <string name="pin_reason_admin">Enter the PIN to continue</string>
+    <string name="pin_reason_profile">Enter the PIN to change profile</string>
+    <string name="who_title">Who\'s watching?</string>
+    <string name="who_change_profile">Change profile</string>
+    <string name="pin_reason_profile_edit">Enter the PIN to change the profiles</string>
+    <string name="setting_profiles">Profiles</string>
+    <string name="setting_profiles_sub">Who\'s watching, each with their own home</string>
+    <string name="profiles_count">%1$d profiles</string>
+    <string name="profile_add">Add a profile</string>
+    <string name="profile_new_name">New profile</string>
+    <string name="profile_watching">Watching now</string>
+    <string name="profile_first_name">First name</string>
+    <string name="profile_kind">Type</string>
+    <string name="profile_kind_adult">Adult</string>
+    <string name="profile_kind_child">Child</string>
+    <string name="profile_allowed_apps">Allowed apps</string>
+    <string name="profile_allowed_count">%1$d apps</string>
+    <string name="profile_delete">Delete this profile</string>
+    <string name="profile_delete_confirm">Press again to delete</string>
+    <string name="note_profile_kept">The profile watching now and the last profile can\'t be deleted. Change profile first.</string>
+    <string name="note_child_apps">Only these apps show on this child\'s home. Everything else on the TV asks for the PIN.</string>
+    <string name="note_profiles_need_pin">Set a PIN in Parental controls: without it, a child\'s profile can be left freely.</string>
+    <string name="note_child_keys_off">The remote is not protected: turn on “Home button opens Matinee” in Home screen so channel, assistant and app buttons do nothing for a child.</string>
+    <string name="setting_extreme_performance">Extreme performance</string>
+    <string name="setting_extreme_performance_sub">For slow TVs: no glass, moving light, animation or background picture. Turning it off goes back to this TV\'s defaults.</string>
     <string name="pin_wrong">Wrong PIN</string>
     <string name="pin_mismatch">The PINs didn\'t match. Try again.</string>
     <string name="pin_locked">Too many tries. Wait %1$d s.</string>
@@ -406,7 +432,7 @@
     </plurals>
     <string name="pin_new_title_directions">Choose 4 arrow steps</string>
     <string name="setting_licenses">Licenses</string>
-    <string name="license_text">Weather data by Open‑Meteo.com, licensed under CC BY 4.0.\nIcons: Tabler Icons, MIT License.\nTypeface: Inter, SIL Open Font License 1.1.\nApp icons and banners belong to their apps.\nAirPlay: UxPlay, GPL-3.0; libplist, LGPL-2.1; OpenSSL and Apple ALAC, Apache-2.0.\nADB: dadb, Apache-2.0.\nSource code: github.com/Jarvis322/matinee</string>
+    <string name="license_text">Weather data by Open‑Meteo.com, licensed under CC BY 4.0.\nIcons: Tabler Icons, MIT License.\nTypeface: Inter, SIL Open Font License 1.1.\nApp icons and banners belong to their apps.\nAirPlay: UxPlay, GPL-3.0; libplist, LGPL-2.1; OpenSSL and Apple ALAC, Apache-2.0.\nADB: dadb, Apache-2.0.</string>
     <string name="setting_add_app">Add an app to the home screen</string>
     <string name="setting_add_app_sub">Apps that are hidden or not on the home screen yet</string>
     <string name="setting_show_add_tile">Show the Add app tile</string>

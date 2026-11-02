@@ -28,6 +28,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import com.tcltv.sahne.ui.LocalBackdrop
+import com.tcltv.sahne.ui.LocalExtremePerformance
 import com.tcltv.sahne.ui.LocalReduceMotion
 import com.tcltv.sahne.ui.LocalWallpaper
 import com.tcltv.sahne.ui.Palette
@@ -40,6 +41,15 @@ import kotlinx.coroutines.withContext
  */
 @Composable
 fun CinematicBackground(accent: Color, modifier: Modifier = Modifier) {
+    if (LocalExtremePerformance.current) {
+        val shared = LocalBackdrop.current
+        LaunchedEffect(Unit) {
+            shared.from = null
+            shared.to = null
+        }
+        Box(modifier.fillMaxSize().background(Palette.Background))
+        return
+    }
     val wallpaper = LocalWallpaper.current
     if (wallpaper != null) {
         WallpaperBackground(wallpaper, modifier)

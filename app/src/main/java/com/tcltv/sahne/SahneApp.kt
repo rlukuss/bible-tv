@@ -24,14 +24,17 @@ import com.tcltv.sahne.ui.LocalFocusOutline
 import com.tcltv.sahne.ui.LocalGlassEffects
 import com.tcltv.sahne.ui.LocalWallpaper
 import com.tcltv.sahne.ui.LocalWallpaperAnimated
+import com.tcltv.sahne.ui.LocalExtremePerformance
 import com.tcltv.sahne.ui.LocalReduceMotion
 import com.tcltv.sahne.ui.PinGate
 import com.tcltv.sahne.ui.home.HomeScreen
+import com.tcltv.sahne.ui.home.WhoScreen
 import com.tcltv.sahne.ui.settings.SettingsScreen
 
 @Composable
 fun SahneApp(viewModel: LauncherViewModel, resumeTick: Int) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val whoVisible by viewModel.whoVisible.collectAsStateWithLifecycle()
     // Saveable: changing the language recreates the activity, and the user should land back in settings.
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var editRequest by remember { mutableIntStateOf(0) }
@@ -54,9 +57,10 @@ fun SahneApp(viewModel: LauncherViewModel, resumeTick: Int) {
     val wallpaper by viewModel.wallpaper.collectAsStateWithLifecycle()
     CompositionLocalProvider(
         LocalReduceMotion provides settings.reduceMotion,
+        LocalExtremePerformance provides settings.extremePerformance,
         LocalGlassEffects provides settings.glassEffects,
         LocalFocusOutline provides settings.focusOutline,
-        LocalWallpaper provides wallpaper,
+        LocalWallpaper provides wallpaper.takeUnless { settings.extremePerformance },
         LocalWallpaperAnimated provides settings.wallpaperAnimated,
     ) {
         DesignCanvas {
@@ -81,6 +85,8 @@ fun SahneApp(viewModel: LauncherViewModel, resumeTick: Int) {
                             editRequest++
                         },
                     )
+                } else if (whoVisible) {
+                    WhoScreen(viewModel)
                 } else {
                     HomeScreen(
                         viewModel = viewModel,
